@@ -1,0 +1,11 @@
+<launch>
+
+  <!--- Run gmapping -->
+  <include file="$(find manny)/include/gmapping_jackal.launch" />
+
+  <!--- Run Move Base -->
+  <include file="$(find manny)/include/move_base_jackal.launch" />
+
+</launch>
+
+

@@ -1,0 +1,21 @@
+<launch>
+
+    <arg name="scan_topic" default="front/scan" />
+
+    <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen" clear_params="true">
+        <rosparam>
+            odom_frame: odom
+            base_frame: base_link
+            map_frame: map
+
+            # Initial Map Size
+            xmin: -20.0
+            ymin: -20.0
+            xmax: 20.0
+            ymax: 20.0
+            delta: 0.05
+
+        </rosparam>
+        <remap from="scan" to="$(arg scan_topic)"/>
+    </node>
+</launch>
