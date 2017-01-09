@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+
 import rospy
 import math
 import time
@@ -56,6 +57,7 @@ class FrontierExplorer(object):
         self.costmap_received = False
         #Wait for map and start frontier explorer navigation
         self.map_received = False
+        self.map_first_callback= True
         rospy.wait_for_message("/map", OccupancyGrid)
         rospy.Subscriber("/map", OccupancyGrid, self.map_callback, queue_size = 50)
         while not self.map_received:
@@ -65,20 +67,28 @@ class FrontierExplorer(object):
         rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.costmap_callback, queue_size = 50)
 
 
-        init_pos=[self.x0, self.y0]
+        self.init_pos=[self.x0, self.y0]
 
         while not rospy.is_shutdown():
 
+            idle_pos=[self.x0, self.y0]
+
             if self.new_goal is True:
-                self.move_to_goal(self.next_goal)
+                self.move_to_goal(self.next_goal, None)
                 self.new_goal=False
 
             if self.terminate is True:
                 #return to initial position
-                self.move_to_goal(init_pos)
+                self.move_to_goal(self.init_pos, None)
                 break
 
             rospy.sleep(0.1)
+
+            #initiate movement for gmapping to register map so that gives map_callback
+            if self.distanceToGoal(idle_pos)<0.1:
+                self.move_to_goal([self.x0, self.y0], self.yaw0+math.pi/2)
+
+            
 
     def costmap_callback(self, msg):
         print("costmap callback")
@@ -88,17 +98,18 @@ class FrontierExplorer(object):
     def map_callback(self, msg):
 
         #go to closest frontier center
-        
 
-        self.map_received=True
         print("map callback")
-        self.map_width=msg.info.width
-        self.map_height=msg.info.height 
-        self.map_resolution=msg.info.resolution
+
+        if self.map_first_callback:
+            self.map_received=True
+            self.map_width=msg.info.width
+            self.map_height=msg.info.height 
+            self.map_resolution=msg.info.resolution
+            self.origin=msg.info.origin
+            self.map_first_callback=False
+
         self.frontiers=list()
-        self.origin=msg.info.origin
-
-
 
         x_origin, y_origin=self.origin.position.x, self.origin.position.y
         _, _, yaw_origin = euler_from_quaternion((self.origin.orientation.x, self.origin.orientation.y, self.origin.orientation.z, self.origin.orientation.w))
@@ -130,7 +141,11 @@ class FrontierExplorer(object):
         self.centers.points=list()
         for center in frontier_centers:
             
-            if self.costmap_data[self.convertToIndex(center[0])]>=99:
+            if self.costmap_data[self.convertToIndex(center[0])]>0:
+                #unreachable place based on inflated costmap
+                self.n_clusters_-=1
+                print("unreachable")
+                print self.n_clusters_
                 continue
 
             p=Point()
@@ -162,8 +177,6 @@ class FrontierExplorer(object):
         print(x, y)
         return int(x)+int(y)*self.map_width
 
-
-
     def outsideRadius(self, point1, point2, radius):
         if math.sqrt((point1[0]-point2[0])**2+(point1[1]-point2[1])**2)<radius:
             return False
@@ -173,7 +186,7 @@ class FrontierExplorer(object):
     def getCluster(self, frontierList):
         frontiers_array=np.asarray(frontierList)
 
-        db = DBSCAN(eps=0.3, min_samples=12).fit(frontiers_array)
+        db = DBSCAN(eps=0.5, min_samples=15).fit(frontiers_array)
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
         core_samples_mask[db.core_sample_indices_] = True
         labels = db.labels_
@@ -193,7 +206,13 @@ class FrontierExplorer(object):
         return cluster_centers
 
     def distanceToGoal(self, goal):
-        return math.sqrt((self.x0-goal[0])**2+(self.y0-goal[1])**2)
+
+        distance=math.sqrt((self.x0-goal[0])**2+(self.y0-goal[1])**2)
+
+        if self.x0==self.init_pos[0] and self.y0==self.init_pos[1]:
+            distance=2
+
+        return distance
 
     def isFrontier(self, map_data, point):
         adjacentPoints=list()
@@ -201,11 +220,11 @@ class FrontierExplorer(object):
         unknownCounter=0
         #free is 0, unknown is -1, wall is 100
         while not self.costmap_received:
-            print("waiting")
+            print("waiting for costmap...")
             rospy.sleep(1)
 
 
-        if map_data[point]==0 and self.costmap_data[point]<99:
+        if map_data[point]==0:
 
             for adjacentPoint in adjacentPoints:
 
@@ -241,9 +260,10 @@ class FrontierExplorer(object):
         _, _, self.yaw0 = euler_from_quaternion((msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
         self.odom_received = True
 
-    def move_to_goal(self, goal_position):
+    def move_to_goal(self, goal_position, direction):
         
-        direction=math.atan2(goal_position[1]-self.y0, goal_position[0]-self.x0)
+        if direction is None:
+            direction=math.atan2(goal_position[1]-self.y0, goal_position[0]-self.x0)
         q_angle = quaternion_from_euler(0, 0, direction)
         q = Quaternion(*q_angle)
 
@@ -260,18 +280,37 @@ class FrontierExplorer(object):
 
 
         self.move_base.send_goal(goal)
-        finished_within_time = True
-        finished_within_time = self.move_base.wait_for_result(rospy.Duration(30 * 1))
-
+        finished_within_time = False
+        #finished_within_time = self.move_base.wait_for_result(rospy.Duration(30 * 1))
+        start_time= rospy.get_time()
+        
         # If we don't get there in time, abort the goal
-        if not finished_within_time:
-            self.move_base.cancel_goal()
-            rospy.loginfo("Goal cancelled, next...")
-        else:
+        duration=60
+
+        while not rospy.is_shutdown():
+
+
+            current_time = rospy.get_time()
+            elapsed=(current_time - start_time)
+            print(elapsed, finished_within_time)
+
+            if elapsed > duration or finished_within_time:
+                print("cancelling goal")
+                self.move_base.cancel_goal()
+                rospy.loginfo("Goal finished, next...")
+                break
+
+            finished_within_time=self.move_base.wait_for_result(rospy.Duration(1))
+            rospy.sleep(0.1)
+
+        #if not finished_within_time:
+        #    self.move_base.cancel_goal()
+        #    rospy.loginfo("Goal cancelled, next...")
+        #else:
             # We made it!
-            state = self.move_base.get_state()
-            if state == 3:
-                rospy.loginfo("Goal succeeded!")
+        #    state = self.move_base.get_state()
+        #    if state == 3:
+        #        rospy.loginfo("Goal succeeded!")
 
     def init_markers_frontiers(self):
         # Set up our waypoint markers
