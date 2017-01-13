@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+
+
+	<include file="$(find manny)/launch/jackal_world.launch">
+	</include>
+
+  	<arg name="config" default="robot" />
+  	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find manny)/config/$(arg config).rviz" />
+
+
+
+
+</launch>
+

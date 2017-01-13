@@ -155,13 +155,13 @@ class FrontierExplorer(object):
             self.centers.points.append(p)
             self.center_pub.publish(self.centers)
 
-            if self.distanceToGoal(center[0])<distance_to_goal and self.outsideRadius(center[0], self.previous_goal, 1):
+            if self.distanceToGoal(center[0])<distance_to_goal and self.outsideRadius(center[0], self.previous_goal, 1) and self.costmap_data[self.convertToIndex(center[0])]==0:
                 self.next_goal=center[0]
                 #if previous goal is near to this goal, select another goal
                 distance_to_goal=self.distanceToGoal(center[0])
+                self.new_goal=True
 
-        if self.n_clusters_>0:
-            self.new_goal=True
+        if self.new_goal:
             self.previous_goal=self.next_goal
         else:
             self.terminate=True
@@ -186,7 +186,7 @@ class FrontierExplorer(object):
     def getCluster(self, frontierList):
         frontiers_array=np.asarray(frontierList)
 
-        db = DBSCAN(eps=0.5, min_samples=15).fit(frontiers_array)
+        db = DBSCAN(eps=0.5, min_samples=10).fit(frontiers_array)
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
         core_samples_mask[db.core_sample_indices_] = True
         labels = db.labels_
@@ -224,7 +224,7 @@ class FrontierExplorer(object):
             rospy.sleep(1)
 
 
-        if map_data[point]==0:
+        if map_data[point]==0 and self.costmap_data[point]==0:
 
             for adjacentPoint in adjacentPoints:
 

@@ -29,7 +29,8 @@ class WallScanner(object):
     n_points=50
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
-
+    use_costmap=False
+    theshold_distance=5
 
     def __init__(self):
         
@@ -66,8 +67,8 @@ class WallScanner(object):
         print("map received")
 
 
-
-        #rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.costmap_callback, queue_size = 50)
+        if self.use_costmap:
+            rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.costmap_callback, queue_size = 50)
 
         self.current_pointOfCompass=None 
         self.init_pos=[self.x0, self.y0]
@@ -116,7 +117,7 @@ class WallScanner(object):
         for i in self.cluster_centers:
             center=self.convertToMap(i)
 
-            if math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)<distance and self.isRightDirection(center, direction):
+            if math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)<distance and self.isRightDirection(center, direction) and self.costmap_data[self.convertToIndex(i[0])]==0:
                 #nearest at the right direction
                 distance=math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)
                 next_goal=center
@@ -124,18 +125,22 @@ class WallScanner(object):
                 self.current_pointOfCompass=i[1]
 
 
-        if next_goal is None:
+        if next_goal is None and distance>self.theshold_distance:
             #find the nearest one
             distance=1000
             for i in self.cluster_centers:
                 center=self.convertToMap(i)
 
-                if math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)<distance:
+                if math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)<distance and self.costmap_data[self.convertToIndex(i[0])]==0:
                     #nearest from current position
                     distance=math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)
                     next_goal=center
                     index=i
                     self.current_pointOfCompass=i[1]
+
+        #if distance to the goal in the right direction is above threshold, just choose the closest one
+
+
 
         if next_goal is not None:
             print("this center is removed")
@@ -168,17 +173,19 @@ class WallScanner(object):
             self.map_resolution=msg.info.resolution
             self.origin=msg.info.origin
             #create visitancy map
-            self.visited_map=np.zeros((self.map_width*self.map_height,), dtype=np.int) #1 as visited, 0 unvisited            
+            self.visited_map=np.zeros((self.map_width*self.map_height,), dtype=np.int) #1 as visited, 0 unvisited 
+            self.costmap_received=False           
 
         self.map_data=msg.data
         self.frontiers=list()
-        self.costmap_received=False
+        
 
-        self.createCostmap(3)
+        if not self.use_costmap:
+            self.createCostmap(15)
 
-        #while not self.costmap_received:
-        #    print("waiting for costmap...")
-        #    rospy.sleep(0.1)
+        while not self.costmap_received:
+            print("waiting for costmap...")
+            rospy.sleep(0.1)
         
         freeOffsetPoints=list()
 
@@ -188,7 +195,7 @@ class WallScanner(object):
         self.printMarker(freeOffsetPoints)
 
         self.cluster_centers.extend(self.getCluster(freeOffsetPoints))
-        print self.cluster_centers
+        #print self.cluster_centers
         self.printCenter(self.cluster_centers)
         self.map_first_callback=False
 
@@ -198,6 +205,9 @@ class WallScanner(object):
         for point in range(len(self.map_data)):
             if self.map_data[point]==100:
                 self.updateGrid(point, radius)
+
+        self.costmap_received=True
+
 
 
     def updateGrid(self, point, radius):
