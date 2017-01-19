@@ -103,7 +103,7 @@ class WallScanExplorer(object):
                     self.rotate(angle)
                 #do inspection here
                 print("doing inspection")
-                #rospy.sleep(10)
+                rospy.sleep(2)
             else: 
                 print("returning to origin")
                 self.move_to_goal(self.init_pos, None)
@@ -167,9 +167,6 @@ class WallScanExplorer(object):
             return math.atan2(math.sin(theta+math.pi), math.cos(theta+math.pi))
 
 
-    
-
-
     def createWindowMap(self, radius):
         size=int(2*radius/self.map_resolution)
         window_map=np.zeros((size, size), dtype=np.uint8)
@@ -186,8 +183,6 @@ class WallScanExplorer(object):
                     window_map[i][j]=1
 
         return window_map           
-
-
 
 
     def getNextGoal(self):
@@ -614,13 +609,13 @@ class WallScanExplorer(object):
         start_time= rospy.get_time()
         frontiers_array=np.asarray(frontierList)
 
-       
+        #X=normalize(frontiers_array)
         #this line takes longest time to run 
         #D = manhattan_distances(frontiers_array, frontiers_array)
         X = StandardScaler().fit_transform(frontiers_array)
         print(rospy.get_time()-start_time)      
         
-        db = DBSCAN(eps=0.5, min_samples=5).fit(X)
+        db = DBSCAN(eps=0.5, min_samples=5, algorithm='ball_tree', metric='haversine').fit(X)
         print(rospy.get_time()-start_time)
         
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
