@@ -9,10 +9,10 @@
             map_frame: map
 
             # Initial Map Size
-            xmin: -20.0
-            ymin: -20.0
-            xmax: 20.0
-            ymax: 20.0
+            xmin: -30.0
+            ymin: -30.0
+            xmax: 30.0
+            ymax: 30.0
             delta: 0.05
 
         </rosparam>

@@ -134,14 +134,14 @@ class FrontierExplorer(object):
                 self.marker_pub.publish(self.markers)
 
 
-        frontier_centers=self.getCluster(self.frontiers)
+        frontier_centers=self.getDbscanCluster(self.frontiers)
 
         distance_to_goal=1000
 
         self.centers.points=list()
         for center in frontier_centers:
             
-            if self.costmap_data[self.convertToIndex(center[0])]>0:
+            if self.costmap_data[self.WorldToIndex(center[0])]>0:
                 #unreachable place based on inflated costmap
                 self.n_clusters_-=1
                 print("unreachable")
@@ -155,7 +155,7 @@ class FrontierExplorer(object):
             self.centers.points.append(p)
             self.center_pub.publish(self.centers)
 
-            if self.distanceToGoal(center[0])<distance_to_goal and self.outsideRadius(center[0], self.previous_goal, 1) and self.costmap_data[self.convertToIndex(center[0])]==0:
+            if self.distanceToGoal(center[0])<distance_to_goal and self.outsideRadius(center[0], self.previous_goal, 1) and self.costmap_data[self.WorldToIndex(center[0])]==0:
                 self.next_goal=center[0]
                 #if previous goal is near to this goal, select another goal
                 distance_to_goal=self.distanceToGoal(center[0])
@@ -166,7 +166,7 @@ class FrontierExplorer(object):
         else:
             self.terminate=True
 
-    def convertToIndex(self, point):
+    def WorldToIndex(self, point):
         #point is in Map x m, y m
         x_origin, y_origin=self.origin.position.x, self.origin.position.y
         _, _, yaw_origin = euler_from_quaternion((self.origin.orientation.x, self.origin.orientation.y, self.origin.orientation.z, self.origin.orientation.w))
@@ -183,7 +183,7 @@ class FrontierExplorer(object):
         else:
             return True
 
-    def getCluster(self, frontierList):
+    def getDbscanCluster(self, frontierList):
         frontiers_array=np.asarray(frontierList)
 
         db = DBSCAN(eps=0.5, min_samples=10).fit(frontiers_array)
@@ -216,7 +216,7 @@ class FrontierExplorer(object):
 
     def isFrontier(self, map_data, point):
         adjacentPoints=list()
-        adjacentPoints=self.getAdjacentPoints(point)
+        
         unknownCounter=0
         #free is 0, unknown is -1, wall is 100
         while not self.costmap_received:
@@ -225,7 +225,7 @@ class FrontierExplorer(object):
 
 
         if map_data[point]==0 and self.costmap_data[point]==0:
-
+            adjacentPoints=self.getAdjacentPoints(point)
             for adjacentPoint in adjacentPoints:
 
                 if adjacentPoint<0 or adjacentPoint>(self.map_width*self.map_height-1):

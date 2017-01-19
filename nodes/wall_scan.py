@@ -29,12 +29,12 @@ class WallScanner(object):
     n_points=50
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
-    use_costmap=False
+    use_costmap=True
     theshold_distance=5
 
     def __init__(self):
         
-        print("starting wall exploration")
+        print("starting wall scanning")
         rospy.init_node('wall_scanner', anonymous=True)
         self.init_markers_frontiers()
         self.init_markers_centers()
@@ -103,13 +103,13 @@ class WallScanner(object):
                 direction=[1, 0]
             elif self.current_pointOfCompass==1:
                 #north
-                direction=[0, -1]
+                direction=[0, 1]
             elif self.current_pointOfCompass==2:
                 #west
                 direction=[-1, 0]
             elif self.current_pointOfCompass==3:
                 #south
-                direction=[0, 1]
+                direction=[0, -1]
 
 
         distance=1000
@@ -119,6 +119,7 @@ class WallScanner(object):
 
             if math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)<distance and self.isRightDirection(center, direction) and self.costmap_data[self.convertToIndex(i[0])]==0:
                 #nearest at the right direction
+
                 distance=math.sqrt((self.x0-center[0])**2+(self.y0-center[1])**2)
                 next_goal=center
                 index=i
@@ -140,10 +141,11 @@ class WallScanner(object):
 
         #if distance to the goal in the right direction is above threshold, just choose the closest one
 
-
+        print("direction")
+        print direction
 
         if next_goal is not None:
-            print("this center is removed")
+            #print("this center is removed")
             self.cluster_centers.remove(index)
 
         return next_goal
@@ -179,9 +181,10 @@ class WallScanner(object):
         self.map_data=msg.data
         self.frontiers=list()
         
-
         if not self.use_costmap:
             self.createCostmap(15)
+
+
 
         while not self.costmap_received:
             print("waiting for costmap...")
@@ -194,7 +197,7 @@ class WallScanner(object):
 
         self.printMarker(freeOffsetPoints)
 
-        self.cluster_centers.extend(self.getCluster(freeOffsetPoints))
+        self.cluster_centers.extend(self.getKmeansCluster(freeOffsetPoints))
         #print self.cluster_centers
         self.printCenter(self.cluster_centers)
         self.map_first_callback=False
@@ -213,8 +216,8 @@ class WallScanner(object):
     def updateGrid(self, point, radius):
         adjacentPoints=list()
 
-        for i in range(-int(radius/2), int(radius+2)):
-            for j in range(-int(radius/2), int(radius+2)):
+        for i in range(-int(radius/2), int(radius/2)):
+            for j in range(-int(radius/2), int(radius/2)):
                 adjacentPoints.append(point+i+j*self.map_width)
 
 
@@ -229,7 +232,7 @@ class WallScanner(object):
         self.costmap_received=True
         self.costmap_data=msg.data
 
-    def getCluster(self, pointsList):
+    def getKmeansCluster(self, pointsList):
         n_clusters=len(pointsList)/self.n_points
 
         positionList=list()
@@ -252,7 +255,7 @@ class WallScanner(object):
         i=0
         for position in cluster_centers:
             
-            if self.map_data[self.convertToIndex(position)]!=0 or not self.notAroundWall(self.convertToIndex(position)):
+            if self.map_data[self.convertToIndex(position)]!=0:
                 print("continue")
                 continue #avoid this cluster position
         
@@ -306,9 +309,9 @@ class WallScanner(object):
         freeOffsetPoints=list()
 
         #free is 0, unknown is -1, wall is 100
-        if self.isFrontier(self.costmap_data, point) and self.visited_map[point]==0:
+        if self.visited_map[point]==0 and self.isFrontier(self.costmap_data, point):
             #set this wall frontier point as visited
-            self.visited_map[point]=1
+            self.updateVisitancy(point, 10)
 
             offsetPoints=self.getOffsetPoints(point)
             
@@ -319,29 +322,23 @@ class WallScanner(object):
                     continue
                 #if adjacent is free, return as a list
 
-                if self.map_data[offsetPoint[0]]==0 and self.notAroundWall(offsetPoint[0]):
+                if self.map_data[offsetPoint[0]]==0:
                     freeOffsetPoints.append(self.convertFromIndex(offsetPoint))
 
         return freeOffsetPoints
 
-    def notAroundWall(self, point):
+    def updateVisitancy(self, point, radius):
+        adjacentPoints=list()  
 
-        adjacentPoints=list()
-
-        adjacentPoints.append(point-1)
-        adjacentPoints.append(point+1)
-        adjacentPoints.append(point-1-self.map_width)
-        adjacentPoints.append(point-self.map_width)
-        adjacentPoints.append(point+1-self.map_width)
-        adjacentPoints.append(point-1+self.map_width)
-        adjacentPoints.append(point+self.map_width)
-        adjacentPoints.append(point+1+self.map_width)
+        for i in range(-int(radius/2), int(radius/2)):
+            for j in range(-int(radius/2), int(radius/2)):
+                adjacentPoints.append(point+i+j*self.map_width)
 
         for adjacentPoint in adjacentPoints:
-            if self.costmap_data[adjacentPoint]>0:
-                return False
-        
-        return True
+            if adjacentPoint < 0 or adjacentPoint > self.map_height*self.map_width-1:
+                continue
+            self.visited_map[adjacentPoint]=100
+
 
     def getOffsetPoints(self, point):
         delta_index=int(self.distance_to_wall/self.map_resolution)
@@ -359,21 +356,19 @@ class WallScanner(object):
 
 
         offsetPoints.append([point-delta_index*self.map_width, east if self.isLeft else west])
-        offsetPoints.append([point-delta_index, north if self.isLeft else south])
+        offsetPoints.append([point-delta_index, south if self.isLeft else north])
         offsetPoints.append([point+delta_index*self.map_width, west if self.isLeft else east])
-        offsetPoints.append([point+delta_index, south if self.isLeft else north])
+        offsetPoints.append([point+delta_index, north if self.isLeft else south])
 
         return offsetPoints
 
     def isFrontier(self, map_data, point):
-        adjacentPoints=list()
-        adjacentPoints=self.getAdjacentPoints(point)
-        unknownCounter=0
+
         #free is 0, unknown is -1, wall is 100
-
-
         if map_data[point]>0:
-
+            adjacentPoints=list()
+            unknownCounter=0
+            adjacentPoints=self.getAdjacentPoints(point)
             for adjacentPoint in adjacentPoints:
 
                 if adjacentPoint<0 or adjacentPoint>(self.map_width*self.map_height-1):

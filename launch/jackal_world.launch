@@ -1,7 +1,7 @@
 <launch>
   <arg name="use_sim_time" default="true" />
-  <arg name="gui" default="true" />
-  <arg name="headless" default="false" />
+  <arg name="gui" default="false" />
+  <arg name="headless" default="true" />
   <arg name="world_name" default="$(find manny)/config/jackal_world.world" />
 
   <!-- Short-term hack to support the original front_laser:=true argument for spawning

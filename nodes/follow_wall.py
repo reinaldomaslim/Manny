@@ -18,88 +18,86 @@ class FollowWall(object):
 
     currentScan=LaserScan()
 
+
     def __init__(self, nodename):
-	rospy.init_node(nodename, anonymous=False)
+        rospy.init_node(nodename, anonymous=False)
 	
         rospy.on_shutdown(self.shutdown)
     
         rospy.Subscriber("/odometry/filtered", Odometry, self.odom_callback, queue_size = 50)
 
-	rospy.Subscriber("/scan", LaserScan, self.scan_callback, queue_size = 50)
+        rospy.Subscriber("/scan", LaserScan, self.scan_callback, queue_size = 50)
 
         # Publisher to manually control the robot (e.g. to stop it, queue_size=5)
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=5)
 	
-	self.side=rospy.get_param("~follow_wall/isRight", True)
-	self.top_set=rospy.get_param("~follow_wall/top_subset", 6)
-	self.bottom_set=rospy.get_param("~follow_wall/bottom_subset", 3)
+        self.side=rospy.get_param("~follow_wall/isRight", True)
+        self.top_set=rospy.get_param("~follow_wall/top_subset", 6)
+        self.bottom_set=rospy.get_param("~follow_wall/bottom_subset", 3)
 	
-
-	rate=rospy.Rate(10)
+        rate=rospy.Rate(10)
 	
-	while not rospy.is_shutdown():
-	    self.top_list=self.createTopSet()
-	    rospy.loginfo(self.top_list)
-	    #self.bottom_list=self.createBottomSet()
-     	    #rospy.loginfo(self.bottom_list) 
-	    error=self.compute_benchmark()
-	    rospy.loginfo(error)
-	    rate.sleep()
+        while not rospy.is_shutdown():
+            self.top_list=self.createTopSet()
+            rospy.loginfo(self.top_list)
+            #self.bottom_list=self.createBottomSet()
+            #rospy.loginfo(self.bottom_list) 
+            error=self.compute_benchmark()
+            rospy.loginfo(error)
+            rate.sleep()
 
 
     def createTopSet(self):
-	result=list()
+        result=list()
 	
-	increment=int(pi/(2*self.top_set*self.currentScan.angle_increment))
-	for i in range(self.top_set):
-	    if self.side:
-	    	result.append(self.interpolate(90+i*increment, 5))
-	    else:
-		result.append(self.interpolate(450-i*increment, 5))
+        increment=int(pi/(2*self.top_set*self.currentScan.angle_increment))
+        for i in range(self.top_set):
+            if self.side:
+                result.append(self.interpolate(90+i*increment, 5))
+            else:
+                result.append(self.interpolate(450-i*increment, 5))
 
-	return result
+        return result
 
     def createBottomSet(self):
-	result=list()
-	increment=int(pi/(4*self.bottom_set*self.currentScan.angle_increment))
-	for i in range(self.bottom_set):
-	    if self.side:
-		result.append(self.interpolate(90-(i+1)*increment, 5))
-	    else:
-		result.append(self.interpolate(450+(i+1)*increment, 5))	
-	return result
+        result=list()
+        increment=int(pi/(4*self.bottom_set*self.currentScan.angle_increment))
+        for i in range(self.bottom_set):
+            if self.side:
+                result.append(self.interpolate(90-(i+1)*increment, 5))
+            else:
+                result.append(self.interpolate(450+(i+1)*increment, 5))	
+        return result
 
     def scan_callback(self, msg):
 
-	#run median filter to remove outliers
-
-	self.currentScan=msg
+        self.currentScan=msg
 	
     def interpolate(self, index, N):
 	
-	data=list()
+        data=list()
 	
-	for i in range(N):
-	    data.append(self.currentScan.ranges[index-int(N/2)+i])
+        for i in range(N):
+            data.append(self.currentScan.ranges[index-int(N/2)+i])
 
-	return self.mean(self.median_filter(data)) 
+        return self.mean(self.median_filter(data)) 
 
     def compute_benchmark(self):
-	result=list()
+        result=list()
 	
-	d=self.top_list[0]
-	increment=pi/(2*self.top_set)
+        d=self.top_list[0]
+        increment=pi/(2*self.top_set)
 
-	for i in range(1, self.top_set):
-	     result.append(d/cos(i*increment)-self.top_list[i])
-	return sum(result)
+        for i in range(1, self.top_set):
+            result.append(d/cos(i*increment)-self.top_list[i])
+        return sum(result)
 		
 
     def filter_distance(self, msg):
-	for i in range(len(msg.data)):
-	    if msg.ranges[i] < msg.range_min or msg.ranges[i] > msg.range_max:
-		msg.ranges[i]=0
-	return msg 
+        for i in range(len(msg.data)):
+            if msg.ranges[i] < msg.range_min or msg.ranges[i] > msg.range_max:
+            msg.ranges[i]=0
+        return msg 
 
     def median(self, data):
 
@@ -117,19 +115,17 @@ class FollowWall(object):
     def mean(self, numbers):
         return float(sum(numbers)) / max(len(numbers), 1)
 
-		
     def median_filter(self, data):
-	result=list()
+        result=list()
 
-	for i in range(1, len(data)-1):
-	    if i==0:
-		result.append(self.median([data[i], data[i], data[i+1]]))
-	    else:
- 	        result.append(self.median([data[i-1], data[i], data[i+1]]))
+        for i in range(1, len(data)-1):
+            if i==0:
+                result.append(self.median([data[i], data[i], data[i+1]]))
+            else:
+                result.append(self.median([data[i-1], data[i], data[i+1]]))
 	
-	result.append(self.median([data[len(data)-2], data[len(data)-1]]))
-
-	return result
+        result.append(self.median([data[len(data)-2], data[len(data)-1]]))
+        return result
 
     def convert_relative_to_absolute(self, boat, target):
         """ boat is catersian (x0, y0),
@@ -146,7 +142,7 @@ class FollowWall(object):
 
     def move(self, goal, mode, mode_param):
 	  
-            finished_within_time = True
+        finished_within_time = True
 	    go_to_next= False
            
   	    if mode==1: #continuous movement function, mode_param is the distance from goal that will set the next goal
