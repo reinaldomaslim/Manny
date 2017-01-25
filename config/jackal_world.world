@@ -2743,9 +2743,9 @@
       <pose>4.55618 -4 0 0 -0 0</pose>
     </model>
     <state world_name='default'>
-      <sim_time>2454 722000000</sim_time>
-      <real_time>65 51526078</real_time>
-      <wall_time>1484212397 676241400</wall_time>
+      <sim_time>2520 816000000</sim_time>
+      <real_time>66 939126344</real_time>
+      <wall_time>1484817860 352488164</wall_time>
       <model name='drc_practice_angled_barrier_135'>
         <pose>-6.19884 8.64913 0 0 0 -2.35209</pose>
         <link name='eight::link'>
@@ -3295,6 +3295,15 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
+      <model name='grey_wall_5'>
+        <pose>-0.109605 -4.82955 0 0 -0 0.325229</pose>
+        <link name='link'>
+          <pose>-0.109605 -4.82955 1.4 0 -0 0.325229</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
       <model name='ground_plane'>
         <pose>0 0 0 0 -0 0</pose>
         <link name='link'>
@@ -3305,51 +3314,51 @@
         </link>
       </model>
       <model name='jackal'>
-        <pose>0.067927 -0.012207 0.0635 -2e-06 -8e-06 0.035965</pose>
+        <pose>0.072329 -0.012791 0.0635 0 1e-06 0.038692</pose>
         <link name='base_link'>
-          <pose>0.067927 -0.012207 0.0635 -2e-06 -8e-06 0.035965</pose>
-          <velocity>2.3e-05 0.000135 -0.000208 -0.000929 -0.001481 -0.000844</velocity>
+          <pose>0.072329 -0.012791 0.0635 0 1e-06 0.038692</pose>
+          <velocity>0.000114 5e-06 -1e-06 0 1e-06 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='front_left_wheel_link'>
-          <pose>0.19209 0.180176 0.098 -2.6e-05 0.038912 0.035963</pose>
-          <velocity>-1.9e-05 1.8e-05 0.000133 -7.2e-05 -0.000174 -0.000209</velocity>
+          <pose>0.195966 0.17993 0.098 -2.4e-05 0.042666 0.038692</pose>
+          <velocity>0.000114 8e-06 -1e-06 2.4e-05 0.00114 3.30872e-24</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='front_right_wheel_link'>
-          <pose>0.205595 -0.195169 0.098 3.1e-05 0.046344 0.035968</pose>
-          <velocity>-0.000194 6e-06 -0.000156 -0.00016 -0.002148 -0.000902</velocity>
+          <pose>0.210495 -0.195377 0.098 2.2e-05 0.051194 0.038692</pose>
+          <velocity>0.000114 2e-06 -1e-06 -0.000112 0.001138 2.64698e-23</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='rear_left_wheel_link'>
-          <pose>-0.069741 0.170756 0.097999 -1e-06 0.021779 0.035965</pose>
-          <velocity>6.2e-05 0.000286 -0.000824 -0.001265 -0.001487 -0.000852</velocity>
+          <pose>-0.065838 0.169796 0.098 -2.1e-05 0.023027 0.038692</pose>
+          <velocity>0.000114 7e-06 -1e-06 1.1e-05 0.001139 3.30872e-24</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='rear_right_wheel_link'>
-          <pose>-0.056235 -0.204591 0.098 1e-06 0.031872 0.035966</pose>
-          <velocity>-0.000196 0.000295 0.000126 -0.003034 -0.00216 -0.00083</velocity>
+          <pose>-0.051309 -0.205512 0.098 1.9e-05 0.033926 0.038691</pose>
+          <velocity>0.000114 3e-06 -1e-06 -9.9e-05 0.001139 -2.64698e-23</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='unit_box_1'>
-        <pose>10.5864 4.3976 0.5 -0 -0 -0.007011</pose>
+        <pose>10.5864 4.39761 0.5 -0 -0 -0.007004</pose>
         <link name='link'>
-          <pose>10.5864 4.3976 0.5 -0 -0 -0.007011</pose>
+          <pose>10.5864 4.39761 0.5 -0 -0 -0.007004</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='unit_box_2'>
-        <pose>-3.41769 10.1973 0.5 0 0 -0.046593</pose>
+        <pose>-3.41769 10.1973 0.5 0 -0 -0.046593</pose>
         <link name='link'>
-          <pose>-3.41769 10.1973 0.5 0 0 -0.046593</pose>
+          <pose>-3.41769 10.1973 0.5 0 -0 -0.046593</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -3358,7 +3367,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose>-0.268679 34.8808 70.8452 0 1.1776 -1.83338</pose>
+        <pose>-5.42627 -0.486238 31.8309 0 1.5096 -1.61338</pose>
         <view_controller>orbit</view_controller>
       </camera>
     </gui>
@@ -4287,6 +4296,52 @@
         <gravity>1</gravity>
       </link>
       <static>0</static>
+    </model>
+    <model name='grey_wall_5'>
+      <static>1</static>
+      <link name='link'>
+        <pose>0 0 1.4 0 -0 0</pose>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>7.5 0.2 2.8</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <bounce/>
+            <friction>
+              <ode/>
+            </friction>
+            <contact>
+              <ode/>
+            </contact>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>0</cast_shadows>
+          <geometry>
+            <box>
+              <size>7.5 0.2 2.8</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://grey_wall/materials/scripts</uri>
+              <uri>model://grey_wall/materials/textures</uri>
+              <name>vrc/grey_wall</name>
+            </script>
+          </material>
+        </visual>
+        <velocity_decay>
+          <linear>0</linear>
+          <angular>0</angular>
+        </velocity_decay>
+        <self_collide>0</self_collide>
+        <kinematic>0</kinematic>
+        <gravity>1</gravity>
+      </link>
+      <pose>0 -6 0 0 -0 0</pose>
     </model>
   </world>
 </sdf>
