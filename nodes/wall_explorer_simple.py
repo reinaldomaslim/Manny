@@ -110,7 +110,7 @@ class WallScanExplorer(object):
 
                 print("doing inspection")
                 self.inspection_pose_pub.publish(self.inspection_pose)
-                rospy.sleep(15)
+                rospy.sleep(1)
             else: 
                 print("returning to origin")
                 self.move_to_goal(self.init_pos, None)
@@ -196,31 +196,13 @@ class WallScanExplorer(object):
         self.inspected_map_pub.publish(self.inspected_costmap)
         return window_map
 
-
-
-
     def getNextGoal(self):
         #based on current location and given point of compass
         #get next goal from self.current_cluster
         isFrontier=False
         next_goal=None
-        direction=[0, 0]
-        if self.current_pointOfCompass is not None:
-            if self.current_pointOfCompass==0:
-                #east
-                direction=[1, 0]
-            elif self.current_pointOfCompass==1:
-                #north
-                direction=[0, 1]
-            elif self.current_pointOfCompass==2:
-                #west
-                direction=[-1, 0]
-            elif self.current_pointOfCompass==3:
-                #south
-                direction=[0, -1]
-        print("direction:", direction)
-        closest_goal=None
-        closest_distance=1000
+
+        correct_goal=None
         correct_distance=1000
         correct_cost=1000
         correct_available=False
@@ -236,9 +218,7 @@ class WallScanExplorer(object):
 
         #convert cluster centers into grid index
         goals=np.asarray(clusters)[:, 0]
-        #do A*
-        
-        
+        #do Djikstra
 
         #for x in goals:
         #    print(self.Astar(grid, x))
@@ -247,37 +227,21 @@ class WallScanExplorer(object):
 
         for i in range(len(clusters)):
             center=self.convertToMap(clusters[i])
-            if path[i][0]!=0 and path[i][0]<closest_distance:
-                #nearest from current position
-                closest_distance=path[i][0]
-                closest_goal=center
-                closest_index=i
-                closest_pointOfCompass=clusters[i][1]
 
             if path[i][0]!=0 and self.getCost(path[i], alpha, center)<correct_cost:# and self.isRightDirection(center, direction):
                 correct_cost=self.getCost(path[i], alpha, center)
                 correct_distance=path[i][0]
                 correct_goal=center
                 correct_index=i
-                correct_pointOfCompass=clusters[i][1]
                 correct_available=True
 
-        if closest_goal is None:
+        if correct_goal is None:
             return None
 
-        if correct_distance/closest_distance>self.threshold_ratio or not correct_available:
-            print("closest", correct_distance/closest_distance)
-            next_goal=closest_goal
-            index=closest_index
-            self.current_pointOfCompass=closest_pointOfCompass
-            distance=closest_distance
-        else:
-            print("correct")
-            next_goal=correct_goal
-            index=correct_index
-            self.current_pointOfCompass=correct_pointOfCompass
-            distance=correct_distance
-
+        print("correct")
+        next_goal=correct_goal
+        index=correct_index
+        distance=correct_distance
 
         #if next_frontier is closer than next wall_scan goal, visit next_frontier 
         if self.next_frontier is not None and next_goal is not None:
@@ -419,18 +383,6 @@ class WallScanExplorer(object):
         for i in range(len(self.cluster_centers)): 
             result[i]=self.WorldToGrid(self.cluster_centers[i][0])
         return result
-
-    def isRightDirection(self, goal, direction):
-
-        if direction[0]!=0:
-            sign_x=(goal[0]-self.x0)/direction[0]
-            return (True if sign_x>0 else False)
-
-        if direction[1]!=0:
-            sign_y=(goal[1]-self.y0)/direction[1]
-            return (True if sign_y>0 else False)
-
-        return True
 
     def getCost(self, path, alpha, goal):
         #(path[i], alpha)
@@ -602,18 +554,8 @@ class WallScanExplorer(object):
             if self.map_data[self.convertToIndex(position)]!=0:
                 #print("continue")
                 continue #avoid this cluster position
-        
-            directionList=list()
-            j=0
-            for k in cluster_label:
-                if k==i:
-                    directionList.append(pointsList[j][1])
-                j+=1
             
-            data=Counter(directionList)
-            direction=data.most_common(1)[0][0]
-            
-            result.append( [[int(position[0]), int(position[1])], direction])
+            result.append( [[int(position[0]), int(position[1])]])
             i+=1
 
         return result
@@ -652,15 +594,11 @@ class WallScanExplorer(object):
         delta_index=int(self.distance_to_wall/self.map_resolution)
         offsetPoints=list()
 
-        east=0
-        north=1
-        west=2
-        south=3
 
-        offsetPoints.append([point-delta_index*self.map_width, east if self.isLeft else west])
-        offsetPoints.append([point-delta_index, south if self.isLeft else north])
-        offsetPoints.append([point+delta_index*self.map_width, west if self.isLeft else east])
-        offsetPoints.append([point+delta_index, north if self.isLeft else south])
+        offsetPoints.append([point-delta_index*self.map_width])
+        offsetPoints.append([point-delta_index])
+        offsetPoints.append([point+delta_index*self.map_width])
+        offsetPoints.append([point+delta_index])
 
         return offsetPoints
 
@@ -714,7 +652,7 @@ class WallScanExplorer(object):
         x=point[0]%self.map_width
         y=math.floor(point[0]/self.map_width)
         #map in 2D
-        return [[x, y], point[1]]
+        return [[x, y]]
 
     def convertToIndex(self, position):
         return int(position[0])+self.map_width*int(position[1])
@@ -816,13 +754,10 @@ class WallScanExplorer(object):
         clusters = [frontiers_array[labels == i] for i in range(self.n_clusters_)]
         cluster_centers=list()
 
-
         for cluster in clusters:
             frontier_kmeans=KMeans(n_clusters=1).fit(cluster)
             frontier_center=frontier_kmeans.cluster_centers_
             cluster_centers.append(frontier_center)
-
-
 
         return cluster_centers
 
@@ -855,9 +790,6 @@ class WallScanExplorer(object):
                     return True
 
         return False
-
-
-
 
     def printCenter(self, cluster_centers):
         self.centers.points=list()

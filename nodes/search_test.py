@@ -28,19 +28,16 @@ class WallScanExplorer(object):
     frontier_distance=list()
     map_width, map_height, map_resolution=0, 0, 0
     distance_to_wall=2
-    n_points=5 #decrease this to increase number of inspection points
+    n_points=12
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
     use_costmap=False
     theshold_distance=10
     visited_costmap=OccupancyGrid()
-    inspected_costmap=OccupancyGrid()
     costmap=OccupancyGrid()
     next_frontier=None
-    threshold_ratio=2.5
-    total_distance_travelled=0
-    inspection_pose=Odometry()
-
+    threshold_ratio=3
+    
     def __init__(self):
         
         print("starting wall exploration")
@@ -57,7 +54,6 @@ class WallScanExplorer(object):
             rospy.sleep(1)
         print("odom received")
         
-        self.inspection_pose_pub=rospy.Publisher("manny/Inspection", Odometry, queue_size=10)
         # * Subscribe to the move_base action server
         self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
 
@@ -84,52 +80,28 @@ class WallScanExplorer(object):
             rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.costmap_callback, queue_size = 50)
 
         self.visited_map_pub = rospy.Publisher("visited_map/costmap", OccupancyGrid, queue_size=10)
-        self.inspected_map_pub =rospy.Publisher("inspected_map/costmap", OccupancyGrid, queue_size=10)
+        
 
         self.current_pointOfCompass=None 
         self.init_pos=[self.x0, self.y0]
 
         while not rospy.is_shutdown():
+            init=self.WorldToGrid([self.x0, self.y0])
+            print(init)
+            print(self.map_resolution*(abs(init[0]-600)+abs(init[1]-600)))
+            grid=self.costMapGrid()
 
-            if self.map_first_callback:
-                rospy.sleep(0.1)
-                continue
 
-            idle_pos=[self.x0, self.y0]
-            #navigate here, direction of the robot depends on the next target
-            next_goal=self.getNextGoal()
+            print(self.Astar(grid, [600, 600]))  
 
-            if next_goal is not None:
-                self.move_to_goal(next_goal, None)
-                #face the correct direction
-                angle=self.correctDirection()
-                if angle is not None:
-                    print("correcting angle", angle*180/math.pi)
-                    self.rotate(angle)
-                #do inspection here
-
-                print("doing inspection")
-                self.inspection_pose_pub.publish(self.inspection_pose)
-                rospy.sleep(15)
-            else: 
-                print("returning to origin")
-                self.move_to_goal(self.init_pos, None)
-                break
-
-            print("total distance:", self.total_distance_travelled)
-
-            #if got stuck in false positives wall, use cmd_vel to perform forward escape
-            if self.distanceToGoal(idle_pos)<0.2:
-                self.forward(0.5)           
-
-            
+            rospy.sleep(0.1)
 
 
     def correctDirection(self):
         
         #extract longest line's direction 
         #create 2d numpy array of rolling window diagram
-        window_map=self.createWindowMap(2.5)
+        window_map=self.createWindowMap(3)
         x0, y0=window_map.shape[0]/2, window_map.shape[1]/2
         
         
@@ -190,13 +162,8 @@ class WallScanExplorer(object):
 
                 if self.map_data[index]>0:
                     window_map[i][j]=1
-                    self.inspected_map[index]=100
 
-        self.inspected_costmap.data=self.inspected_map
-        self.inspected_map_pub.publish(self.inspected_costmap)
-        return window_map
-
-
+        return window_map           
 
 
     def getNextGoal(self):
@@ -218,7 +185,6 @@ class WallScanExplorer(object):
             elif self.current_pointOfCompass==3:
                 #south
                 direction=[0, -1]
-        print("direction:", direction)
         closest_goal=None
         closest_distance=1000
         correct_distance=1000
@@ -254,7 +220,7 @@ class WallScanExplorer(object):
                 closest_index=i
                 closest_pointOfCompass=clusters[i][1]
 
-            if path[i][0]!=0 and self.getCost(path[i], alpha, center)<correct_cost:# and self.isRightDirection(center, direction):
+            if path[i][0]!=0 and self.getCost(path[i], alpha, center)<correct_cost and self.isRightDirection(center, direction):
                 correct_cost=self.getCost(path[i], alpha, center)
                 correct_distance=path[i][0]
                 correct_goal=center
@@ -266,13 +232,11 @@ class WallScanExplorer(object):
             return None
 
         if correct_distance/closest_distance>self.threshold_ratio or not correct_available:
-            print("closest", correct_distance/closest_distance)
             next_goal=closest_goal
             index=closest_index
             self.current_pointOfCompass=closest_pointOfCompass
             distance=closest_distance
         else:
-            print("correct")
             next_goal=correct_goal
             index=correct_index
             self.current_pointOfCompass=correct_pointOfCompass
@@ -281,15 +245,13 @@ class WallScanExplorer(object):
 
         #if next_frontier is closer than next wall_scan goal, visit next_frontier 
         if self.next_frontier is not None and next_goal is not None:
-            if distance>self.Astar(grid, self.WorldToGrid(self.next_frontier)):
-                distance=self.Astar(grid, self.WorldToGrid(self.next_frontier))
+            if distance>self.distanceToGoal(self.next_frontier):
                 print("going to frontier")
                 next_goal=self.next_frontier
                 isFrontier=True
                 self.next_frontier=None
 
         if next_goal is None:
-            distance=self.Astar(grid, self.WorldToGrid(self.next_frontier))
             print("going to frontier")
             next_goal=self.next_frontier
             isFrontier=True
@@ -297,9 +259,6 @@ class WallScanExplorer(object):
 
         if next_goal is not None and not isFrontier:
             self.cluster_centers.remove(clusters[index])
-
-        if next_goal is not None:
-            self.total_distance_travelled+=distance
 
         return next_goal
 
@@ -309,10 +268,10 @@ class WallScanExplorer(object):
         # insert code here
         # ----------------------------------------
         #first print initial value, expand and insert to pool, choose one with least optimal path, if equal to goal return, if cannot expand fail.
-        delta = [[0, 1], # go up
-             [ -1, 0], # go left
-             [ 0, -1], # go down
-             [ 1, 0]] # go right
+        delta = [[-1, 0], # go up
+             [ 0,-1], # go left
+             [ 1, 0], # go down
+             [ 0, 1]] # go right
         init=self.WorldToGrid([self.x0, self.y0])
         cost=1
         pool=[]
@@ -323,9 +282,6 @@ class WallScanExplorer(object):
         index=1
         path=np.zeros((len(goals), 3))
         found=0
-
-
-
 
         while(len(pool)!=0):
             current=[]
@@ -354,9 +310,6 @@ class WallScanExplorer(object):
             if found==len(goals):
                 break
 
-        for i in range(len(path)):
-            if path[i][0]==0:
-                path[i][0]=abs(init[0]-int(goals[i][0]))+abs(init[1]-int(goals[i][1]))
         path[:, 0]=path[:, 0]*self.map_resolution
         print("found:", found)
         return path
@@ -388,7 +341,7 @@ class WallScanExplorer(object):
             index-=1
             #print(current)
             if (current[0][1]==goal[0] and current[0][2]==goal[1]):
-                path=current[0][0]
+                path=current[0]
                 break
                 
             new=[]
@@ -397,22 +350,21 @@ class WallScanExplorer(object):
                 
                 if new[1]<0 or new[1]>len(grid)-1 or new[2]<0 or new[2]>len(grid[0])-1:
                     continue
-                if visit[new[1]][new[2]]==0 and grid[new[1]][new[2]]==0:
+                if visit[new[1]][new[2]]==0 and grid[new[1]][new[2]]!=100:
                     pool.append([])
                     pool[index].append(new)
                     #print(pool)
                     index+=1
                     visit[new[1]][new[2]]=1
-        
         if path==[]:
-            path=abs(init[0]-int(goal[0]))+abs(init[1]-int(goal[1]))
-
-        path=path*self.map_resolution 
+            return 'fail'
+        
+        path[0]=path[0]*self.map_resolution
 
         return path
 
     def costMapGrid(self):
-        return np.reshape(self.costmap_data, (self.map_height, self.map_width)).T
+        return np.reshape(self.costmap_data, (self.map_width, self.map_height)).T
 
     def convertClusters(self):
         result=np.zeros((len(self.cluster_centers), 2))
@@ -491,13 +443,10 @@ class WallScanExplorer(object):
             self.visited_map=np.zeros((self.map_width*self.map_height,), dtype=np.int)
             self.visited_costmap.info=msg.info
             self.visited_costmap.header=msg.header
-
             self.costmap.info=msg.info
             self.costmap.header=msg.header
-
-            self.inspected_map=np.zeros((self.map_width*self.map_height,), dtype=np.int)
-            self.inspected_costmap.info=msg.info
-            self.inspected_costmap.header=msg.header            
+            self.goals_map=np.zeros((self.map_width*self.map_height,), dtype=np.int)
+            
 
         self.costmap_radius=int(0.6*self.distance_to_wall/self.map_resolution)
 
@@ -513,33 +462,6 @@ class WallScanExplorer(object):
             print("waiting for costmap...")
             rospy.sleep(0.1)
     
-
-        start_time= rospy.get_time()
-        #find frontiers and wall->update freeOffsetPoints    
-        frontiers=self.findFrontiers()
-        print("findFrontiers time")
-        print(rospy.get_time()-start_time)
-
-        #compute wall scanning points
-        start_time= rospy.get_time()
-        self.cluster_centers.extend(self.getKmeansCluster(self.freeOffsetPoints))
-        #print self.cluster_centers
-        print("clusters centers updated")
-        print(rospy.get_time()-start_time)
-
-
-        #find frontier centers
-        start_time= rospy.get_time()
-        frontier_centers=self.getDbscanCluster(frontiers)
-        self.next_frontier=self.getNearestFrontier(frontier_centers)
-        print(rospy.get_time()-start_time)
-
-
-        self.printMarker(self.freeOffsetPoints)
-        self.printFrontier(frontier_centers)
-        self.printCenter(self.cluster_centers)
-        self.visited_costmap.data=self.visited_map
-        self.visited_map_pub.publish(self.visited_costmap)
 
         print("frontier centers updated")
         
@@ -567,7 +489,11 @@ class WallScanExplorer(object):
             for j in range(-int(radius/2), int(radius/2)):
                 self.costmap_data[point+i+j*self.map_width]=100
 
+    def updateGoals(self, point, radius):
 
+        for i in range(-int(radius/2), int(radius/2)):
+            for j in range(-int(radius/2), int(radius/2)):
+                self.goals_map[point+i+j*self.map_width]=100
 
     def costmap_callback(self, msg):
         print("costmap callback")
@@ -907,7 +833,6 @@ class WallScanExplorer(object):
         self.y0 = msg.pose.pose.position.y
         _, _, self.yaw0 = euler_from_quaternion((msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
         self.odom_received = True
-        self.inspection_pose=msg
 
     def move_to_goal(self, goal_position, direction):
         
