@@ -28,7 +28,7 @@ class WallScanExplorer(object):
     frontier_distance=list()
     map_width, map_height, map_resolution=0, 0, 0
     distance_to_wall=2
-    n_points=5 #decrease this to increase number of inspection points
+    n_points=10 #decrease this to increase number of inspection points
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
     use_costmap=False

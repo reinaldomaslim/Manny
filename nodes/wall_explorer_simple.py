@@ -28,7 +28,8 @@ class WallScanExplorer(object):
     frontier_distance=list()
     map_width, map_height, map_resolution=0, 0, 0
     distance_to_wall=2
-    n_points=5 #decrease this to increase number of inspection points
+    n_points=12 #decrease this to increase number of inspection points
+    n_points_secondary=5
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
     use_costmap=False
@@ -88,7 +89,7 @@ class WallScanExplorer(object):
 
         self.current_pointOfCompass=None 
         self.init_pos=[self.x0, self.y0]
-
+        inspection_points=0
         while not rospy.is_shutdown():
 
             if self.map_first_callback:
@@ -102,34 +103,41 @@ class WallScanExplorer(object):
             if next_goal is not None:
                 self.move_to_goal(next_goal, None)
                 #face the correct direction
+                self.updateGoals(self.WorldToIndex(next_goal), 1.5) #mark around 1 m of visited goals
+
                 angle=self.correctDirection()
-                if angle is not None:
+                attempt=1
+                while angle is not None and abs(self.yaw0-angle)> 3*math.pi/180:
+                    if attempt>5:
+                        break
                     print("correcting angle", angle*180/math.pi)
                     self.rotate(angle)
-                #do inspection here
+                    angle=self.correctDirection()
+                    attempt+=1
 
+                #do inspection here
                 print("doing inspection")
+                inspection_points+=1
                 self.inspection_pose_pub.publish(self.inspection_pose)
-                rospy.sleep(1)
+                rospy.sleep(0.1)
             else: 
                 print("returning to origin")
                 self.move_to_goal(self.init_pos, None)
                 break
 
-            print("total distance:", self.total_distance_travelled)
-
+            print("no inspection points:", inspection_points)
+            print("total distance: ", self.total_distance_travelled)
+            print("wall checked: ", self.computeWallChecked(), "%")
             #if got stuck in false positives wall, use cmd_vel to perform forward escape
             if self.distanceToGoal(idle_pos)<0.2:
                 self.forward(0.5)           
 
             
-
-
     def correctDirection(self):
         
         #extract longest line's direction 
         #create 2d numpy array of rolling window diagram
-        window_map=self.createWindowMap(2.5)
+        window_map=self.createWindowMap(3)
         x0, y0=window_map.shape[0]/2, window_map.shape[1]/2
         
         
@@ -206,7 +214,7 @@ class WallScanExplorer(object):
         correct_distance=1000
         correct_cost=1000
         correct_available=False
-        alpha=0.3
+        alpha=0.4
         #find nearest goal in the right direction
         #get the A* path distance to each cluster centers
         clusters=self.filter_clusters(5)
@@ -221,12 +229,14 @@ class WallScanExplorer(object):
         #do Djikstra
 
         #for x in goals:
-        #    print(self.Astar(grid, x))
+        #    print(self.Djikstra(grid, x))
         path=self.search(grid, goals)
         print(path)
 
         for i in range(len(clusters)):
             center=self.convertToMap(clusters[i])
+
+
 
             if path[i][0]!=0 and self.getCost(path[i], alpha, center)<correct_cost:# and self.isRightDirection(center, direction):
                 correct_cost=self.getCost(path[i], alpha, center)
@@ -245,15 +255,15 @@ class WallScanExplorer(object):
 
         #if next_frontier is closer than next wall_scan goal, visit next_frontier 
         if self.next_frontier is not None and next_goal is not None:
-            if distance>self.Astar(grid, self.WorldToGrid(self.next_frontier)):
-                distance=self.Astar(grid, self.WorldToGrid(self.next_frontier))
+            if distance>self.Djikstra(grid, self.WorldToGrid(self.next_frontier)):
+                distance=self.Djikstra(grid, self.WorldToGrid(self.next_frontier))
                 print("going to frontier")
                 next_goal=self.next_frontier
                 isFrontier=True
                 self.next_frontier=None
 
         if next_goal is None:
-            distance=self.Astar(grid, self.WorldToGrid(self.next_frontier))
+            distance=self.Djikstra(grid, self.WorldToGrid(self.next_frontier))
             print("going to frontier")
             next_goal=self.next_frontier
             isFrontier=True
@@ -266,6 +276,14 @@ class WallScanExplorer(object):
             self.total_distance_travelled+=distance
 
         return next_goal
+
+    def updateGoals(self, point, radius):
+
+        r=radius/self.map_resolution
+
+        for i in range(-int(r/2), int(r/2)):
+            for j in range(-int(r/2), int(r/2)):
+                self.goals_map[point+i+j*self.map_width]=100
 
 #-------------------------auxiliary functions
     def search(self, grid, goals):
@@ -325,7 +343,7 @@ class WallScanExplorer(object):
         print("found:", found)
         return path
 
-    def Astar(self, grid, goal):
+    def Djikstra(self, grid, goal):
         # ----------------------------------------
         # insert code here
         # ----------------------------------------
@@ -413,13 +431,19 @@ class WallScanExplorer(object):
             distance=1000
             for j in range(len(self.cluster_centers)):
                 x=self.cluster_centers[j]
-                if visited[j]>0:
-                    continue
+
+                if self.goals_map[self.convertToIndex(x[0])]>0 or visited[j]>0:
+                    continue            
+
                 if (abs(init[0]-x[0][0])+abs(init[1]-x[0][1]))<distance:
                     distance=abs(init[0]-x[0][0])+abs(init[1]-x[0][1])
                     nearest=x
                     index=j
             print(distance*self.map_resolution)
+
+            if nearest is None:
+                return None
+
             result.append(nearest)
             visited[index]=1
 
@@ -432,6 +456,8 @@ class WallScanExplorer(object):
         print("map callback")
 
         if self.map_first_callback:
+
+            #append offset points from walls
             self.map_received=True
             self.map_width=msg.info.width
             self.map_height=msg.info.height 
@@ -440,16 +466,23 @@ class WallScanExplorer(object):
             #create visitancy map
              #100 as visited, 0 unvisited 
             self.costmap_received=False
+
+            #mark areas around offset points that has been clustered before, to prevent reclustering
             self.visited_map=np.zeros((self.map_width*self.map_height,), dtype=np.int)
             self.visited_costmap.info=msg.info
             self.visited_costmap.header=msg.header
 
+            #filter out frontiers or offset points so not too close to wall
             self.costmap.info=msg.info
             self.costmap.header=msg.header
 
+            #mark inspected walls 
             self.inspected_map=np.zeros((self.map_width*self.map_height,), dtype=np.int)
             self.inspected_costmap.info=msg.info
-            self.inspected_costmap.header=msg.header            
+            self.inspected_costmap.header=msg.header           
+
+            #mark around visited goals to filter out redundant/close goals
+            self.goals_map=np.zeros((self.map_width*self.map_height,), dtype=np.int) 
 
         self.costmap_radius=int(0.6*self.distance_to_wall/self.map_resolution)
 
@@ -531,8 +564,9 @@ class WallScanExplorer(object):
 
     def getKmeansCluster(self, pointsList):
 
-        n_clusters=int(math.ceil(len(pointsList)/self.n_points))
 
+        n_clusters=int(math.ceil(len(pointsList)/self.n_points))
+        self.n_points=self.n_points_secondary
         if n_clusters==0:
             return []
 
@@ -661,6 +695,9 @@ class WallScanExplorer(object):
     def getNearestFrontier(self, frontier_centers):
         distance_to_goal=1000
         next_frontier=None
+        if frontier_centers is None:
+            return None
+
         for center in frontier_centers:
             
             if self.costmap_data[self.WorldToIndex(center[0])]>0:
@@ -733,6 +770,10 @@ class WallScanExplorer(object):
 
         start_time= rospy.get_time()
         frontiers_array=np.asarray(frontierList)
+
+        if len(frontiers_array)==0:
+            return None
+
 
         X=normalize(frontiers_array)
         #this line takes longest time to run 
@@ -807,21 +848,27 @@ class WallScanExplorer(object):
     def printMarker(self, markerList):
         self.markers.points=list()
         
-        for x in markerList:
-            #markerList store points wrt 2D world coordinate
-            marker=self.convertToMap(x)
-            p=Point()
+        if markerList is None:
+            return
+        else:
+            for x in markerList:
+                #markerList store points wrt 2D world coordinate
+                marker=self.convertToMap(x)
+                p=Point()
 
-            p.x=marker[0]
-            p.y=marker[1]
-            p.z=0
+                p.x=marker[0]
+                p.y=marker[1]
+                p.z=0
 
-            self.markers.points.append(p)
-            self.marker_pub.publish(self.markers)
+                self.markers.points.append(p)
+                self.marker_pub.publish(self.markers)
 
     def printFrontier(self, markerList):
         self.frontiers.points=list()
         
+        if markerList is None:
+            return
+
         for x in markerList:
             #markerList store points wrt 2D world coordinate
             
@@ -1028,6 +1075,18 @@ class WallScanExplorer(object):
         self.frontiers.header.frame_id = 'odom'
         self.frontiers.header.stamp = rospy.Time.now()
         self.frontiers.points = list()
+
+
+    def computeWallChecked(self):
+
+        nb_checked=np.count_nonzero(self.inspected_costmap.data>0)
+        #print("nb_checked", nb_checked)
+        nb_wall=np.count_nonzero(np.asarray(self.map_data)>0)
+        #print("nb_wall", nb_wall)
+        percentage=nb_checked*100/nb_wall
+        return percentage
+
+
 
 if __name__ == '__main__':
     try:
