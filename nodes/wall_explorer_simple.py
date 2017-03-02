@@ -28,12 +28,11 @@ class WallScanExplorer(object):
     frontier_distance=list()
     map_width, map_height, map_resolution=0, 0, 0
     distance_to_wall=2
-    n_points=12 #decrease this to increase number of inspection points
-    n_points_secondary=5
+    n_points=10 #decrease this to increase number of inspection points
+    n_points_secondary=4
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
     use_costmap=False
-    theshold_distance=10
     visited_costmap=OccupancyGrid()
     inspected_costmap=OccupancyGrid()
     costmap=OccupancyGrid()
@@ -74,8 +73,8 @@ class WallScanExplorer(object):
         #Wait for map and start frontier explorer navigation
         self.map_received = False
         self.map_first_callback= True
-        rospy.wait_for_message("/map", OccupancyGrid)
-        rospy.Subscriber("/map", OccupancyGrid, self.map_callback, queue_size = 50)
+        rospy.wait_for_message("/map/raw", OccupancyGrid)
+        rospy.Subscriber("/map/raw", OccupancyGrid, self.map_callback, queue_size = 50)
         while not self.map_received:
             rospy.sleep(1)
         print("map received")
@@ -237,7 +236,6 @@ class WallScanExplorer(object):
             center=self.convertToMap(clusters[i])
 
 
-
             if path[i][0]!=0 and self.getCost(path[i], alpha, center)<correct_cost:# and self.isRightDirection(center, direction):
                 correct_cost=self.getCost(path[i], alpha, center)
                 correct_distance=path[i][0]
@@ -306,10 +304,7 @@ class WallScanExplorer(object):
         path=np.zeros((len(goals), 3))
         found=0
 
-
-
-
-        while(len(pool)!=0):
+        while(len(pool)!=0) and found==0:
             current=[]
             
             current=pool.pop(0)

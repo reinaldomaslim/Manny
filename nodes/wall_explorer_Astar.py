@@ -29,6 +29,7 @@ class WallScanExplorer(object):
     map_width, map_height, map_resolution=0, 0, 0
     distance_to_wall=2
     n_points=10 #decrease this to increase number of inspection points
+    n_points_secondary=5
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
     use_costmap=False
@@ -103,14 +104,19 @@ class WallScanExplorer(object):
                 self.move_to_goal(next_goal, None)
                 #face the correct direction
                 angle=self.correctDirection()
-                if angle is not None:
+                attempt=1
+                while angle is not None and abs(self.yaw0-angle)> 3*math.pi/180:
+                    if attempt>5:
+                        break
                     print("correcting angle", angle*180/math.pi)
                     self.rotate(angle)
+                    angle=self.correctDirection()
+                    attempt+=1
                 #do inspection here
 
                 print("doing inspection")
                 self.inspection_pose_pub.publish(self.inspection_pose)
-                rospy.sleep(15)
+                rospy.sleep(2)
             else: 
                 print("returning to origin")
                 self.move_to_goal(self.init_pos, None)
@@ -580,6 +586,7 @@ class WallScanExplorer(object):
     def getKmeansCluster(self, pointsList):
 
         n_clusters=int(math.ceil(len(pointsList)/self.n_points))
+        self.n_points=self.n_points_secondary
 
         if n_clusters==0:
             return []

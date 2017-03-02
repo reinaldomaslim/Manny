@@ -12,6 +12,7 @@
         <rosparam file="$(find manny)/config/yaml/global_costmap_params.yaml" command="load"/>
         <rosparam file="$(find manny)/config/yaml/base_local_planner_params.yaml" command="load"/>
 	<remap from="odom" to="odometry/filtered" />
+    <remap from="map" to="/map/raw"/>
     </node>
 
 </launch>
