@@ -1,0 +1,19 @@
+                       
+
+<launch>
+
+    <!-- Run the map server -->
+    <node name="map_server" pkg="map_server" type="map_server" args="$(find manny)/maps/lab.yaml"/>
+
+    <!--- Run AMCL -->
+    <include file="$(find manny)/launch/amcl.launch" />
+
+    <!--- Run Move Base-->
+    <include file="$(find manny)/launch/move_base_jackal.launch" /> 
+
+    <!-- Run Jackal rviz -->
+    <include file="$(find jackal_viz)/launch/view_robot.launch">
+    </include>
+
+</launch>
+
