@@ -10,7 +10,9 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 class MapRepub(object):
 
     costmap=OccupancyGrid()
+
     costmap_final=OccupancyGrid()
+
 
     def __init__(self):
         #this node inflates walls from gmapping for movebase extra margin
@@ -34,6 +36,7 @@ class MapRepub(object):
             rate.sleep()
 
 
+
     def map_callback(self, msg):
 
         #append offset points from walls
@@ -47,11 +50,13 @@ class MapRepub(object):
 
         #mark inspected walls 
         self.costmap.data=np.copy(msg.data)
+
         self.createCostmap(20, msg.data)
         self.costmap.info=msg.info
         self.costmap.header=msg.header           
 
         self.costmap_final=self.costmap
+
 
 
     def createCostmap(self, radius, map_data):

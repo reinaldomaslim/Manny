@@ -27,9 +27,11 @@ class WallScanExplorer(object):
     x0, y0, yaw0 = 0, 0, 0
     frontier_distance=list()
     map_width, map_height, map_resolution=0, 0, 0
+
     distance_to_wall=2.5
     n_points=10 #decrease this to increase number of inspection points
     n_points_secondary=3 #10-3 record high 96%
+
     isLeft=True #thermal camera on the left, wall always on the left. go clockwise inner path
     cluster_centers=list()
     use_costmap=False
@@ -73,8 +75,10 @@ class WallScanExplorer(object):
         #Wait for map and start frontier explorer navigation
         self.map_received = False
         self.map_first_callback= True
+
         rospy.wait_for_message("/map", OccupancyGrid)
         rospy.Subscriber("/map", OccupancyGrid, self.map_callback, queue_size = 5)
+
         while not self.map_received:
             rospy.sleep(1)
         print("map received")
@@ -102,7 +106,9 @@ class WallScanExplorer(object):
             if next_goal is not None:
                 self.move_to_goal(next_goal, None)
                 #face the correct direction
+
                 self.updateGoals(self.WorldToIndex(next_goal), 2) #mark around 2 m of visited goals
+
 
                 angle=self.correctDirection()
                 attempt=1

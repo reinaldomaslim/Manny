@@ -13,7 +13,11 @@ from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
 
 from nav_msgs.msg import Odometry
+<<<<<<< HEAD
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
+=======
+from geometry_msgs.msg import Point, Pose, Quaternion
+>>>>>>> 0d5f0d2d54f8f17abc1dcb94d7671808d3593457
 from visualization_msgs.msg import MarkerArray, Marker
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
@@ -36,7 +40,9 @@ class FrontierExplorer(object):
         rospy.init_node('frontier_explorer', anonymous=True)
         self.init_markers_frontiers()
         self.init_markers_centers()
+
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=5)      
+
         #wait for odom
         self.odom_received = False
         rospy.wait_for_message("/odometry/filtered", Odometry)
@@ -85,6 +91,7 @@ class FrontierExplorer(object):
             rospy.sleep(0.1)
 
             #initiate movement for gmapping to register map so that gives map_callback
+
             #if self.distanceToGoal(idle_pos)<0.2:
             #    self.forward(0.5)  
 
@@ -106,6 +113,7 @@ class FrontierExplorer(object):
             else:
                 self.cmd_vel_pub.publish(msg)
             rate.sleep()
+
 
     def costmap_callback(self, msg):
         print("costmap callback")
@@ -161,8 +169,10 @@ class FrontierExplorer(object):
             if self.costmap_data[self.WorldToIndex(center[0])]>0:
                 #unreachable place based on inflated costmap
                 self.n_clusters_-=1
+
                 #print("unreachable")
                 #print self.n_clusters_
+
                 continue
 
             p=Point()
@@ -191,7 +201,9 @@ class FrontierExplorer(object):
         x=((point[0]-x_origin)*math.cos(yaw_origin)+(point[1]-y_origin)*math.sin(yaw_origin))/self.map_resolution
         y=(-(point[0]-x_origin)*math.sin(yaw_origin)+(point[1]-y_origin)*math.cos(yaw_origin))/self.map_resolution
 
+
         #print(x, y)
+
         return int(x)+int(y)*self.map_width
 
     def outsideRadius(self, point1, point2, radius):
@@ -210,7 +222,9 @@ class FrontierExplorer(object):
 
         # Number of clusters in labels, ignoring noise if present.
         self.n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+
         #print self.n_clusters_
+
 
         clusters = [frontiers_array[labels == i] for i in xrange(self.n_clusters_)]
         cluster_centers=list()
@@ -309,7 +323,9 @@ class FrontierExplorer(object):
 
             current_time = rospy.get_time()
             elapsed=(current_time - start_time)
+
             #print(elapsed, finished_within_time)
+
 
             if elapsed > duration or finished_within_time:
                 print("cancelling goal")
