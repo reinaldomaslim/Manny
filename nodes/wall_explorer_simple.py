@@ -47,9 +47,11 @@ class WallScanExplorer(object):
         
         print("starting wall exploration")
         rospy.init_node('wall_scan_explorer', anonymous=True)
+        #init markers for rviz
         self.init_markers_frontiers()
         self.init_markers_centers()
         self.init_frontiers()
+        #init cmd_vel publisher for rotate and forward
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=5)
         #wait for odom
         self.odom_received = False
@@ -59,8 +61,9 @@ class WallScanExplorer(object):
             rospy.sleep(1)
         print("odom received")
         
+        #publish pose during inspection
         self.inspection_pose_pub=rospy.Publisher("manny/Inspection", Odometry, queue_size=10)
-        # * Subscribe to the move_base action server
+        #Subscribe to the move_base action server
         self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
 
         # * Wait 60 seconds for the action server to become available
@@ -69,13 +72,13 @@ class WallScanExplorer(object):
         rospy.loginfo("Connected to move base server")
         rospy.loginfo("Starting navigation test")
 
+        #create and publish costmap to debug, costmap needed to mask out unreachable waypoints
         self.costmap_pub = rospy.Publisher("manny/costmap", OccupancyGrid, queue_size=10)
-
         self.costmap_received= False
-        #Wait for map and start frontier explorer navigation
+
+        #Wait for map from gmapping
         self.map_received = False
         self.map_first_callback= True
-
         rospy.wait_for_message("/map", OccupancyGrid)
         rospy.Subscriber("/map", OccupancyGrid, self.map_callback, queue_size = 5)
 
@@ -83,33 +86,39 @@ class WallScanExplorer(object):
             rospy.sleep(1)
         print("map received")
 
-
+        #set as false, not using costmap from movebase unless map is fully built. movebase only published once
         if self.use_costmap:
             rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.costmap_callback, queue_size = 50)
 
         self.visited_map_pub = rospy.Publisher("visited_map/costmap", OccupancyGrid, queue_size=10)
         self.inspected_map_pub =rospy.Publisher("inspected_map/costmap", OccupancyGrid, queue_size=10)
 
-        self.current_pointOfCompass=None 
+        #memorize starting position 
         self.init_pos=[self.x0, self.y0]
+        #count inspection waypoints where robot stops to inspect
         inspection_points=0
+
+        #start the loop
         while not rospy.is_shutdown():
 
             if self.map_first_callback:
                 rospy.sleep(0.1)
                 continue
 
+            #memorize idle position, if not moving, move forward to unstuck
             idle_pos=[self.x0, self.y0]
+            
             #navigate here, direction of the robot depends on the next target
             next_goal=self.getNextGoal()
 
             if next_goal is not None:
+                #move to the goal   
                 self.move_to_goal(next_goal, None)
-                #face the correct direction
 
-                self.updateGoals(self.WorldToIndex(next_goal), 2) #mark around 2 m of visited goals
+                #mark around 2 m of visited goals
+                self.updateGoals(self.WorldToIndex(next_goal), 2) 
 
-
+                #face the correct direction until 5 attempts or within 3 degree
                 angle=self.correctDirection()
                 attempt=1
                 while angle is not None and abs(self.yaw0-angle)> 3*math.pi/180:
@@ -126,18 +135,22 @@ class WallScanExplorer(object):
                 self.inspection_pose_pub.publish(self.inspection_pose)
                 rospy.sleep(0.1)
             else: 
-                print("returning to origin")
-                self.move_to_goal(self.init_pos, None)
                 break
 
+            #performance indicator
             print("no inspection points:", inspection_points)
             print("total distance: ", self.total_distance_travelled)
             print("wall checked: ", self.computeWallChecked(), "%")
+            
             #if got stuck in false positives wall, use cmd_vel to perform forward escape
             if self.distanceToGoal(idle_pos)<0.2:
-                self.forward(0.5)           
+                self.forward(0.5)
 
-            
+        #inspection finished
+        print("returning to origin")
+        self.move_to_goal(self.init_pos, None)
+
+#-------------------------auxiliary functions           
     def correctDirection(self):
         
         #extract longest line's direction 
@@ -170,9 +183,7 @@ class WallScanExplorer(object):
                     x_mid=(x2+x1)/2
                     y_mid=(y2+y1)/2
 
-
         gamma=math.atan2(x_mid-x0, y_mid-y0)
-
         diff_angle=math.atan2(math.sin(gamma-alpha), math.cos(gamma-alpha))
 
         if self.isLeft:
@@ -186,10 +197,9 @@ class WallScanExplorer(object):
             else:
                 return math.atan2(math.sin(alpha+math.pi), math.cos(alpha+math.pi))    
 
-        
-
 
     def createWindowMap(self, radius):
+        #traverse through window with robot at center, return 2D np array
         size=int(2*radius/self.map_resolution)
         window_map=np.zeros((size, size), dtype=np.uint8)
 
@@ -219,65 +229,60 @@ class WallScanExplorer(object):
         correct_distance=1000
         correct_cost=1000
         correct_available=False
+        correct_index=-1
         alpha=0.4
         #find nearest goal in the right direction
         #get the A* path distance to each cluster centers
         clusters=self.filter_clusters(5)
-        print(clusters)
-        #convert costmap into grids
         grid=self.costMapGrid()
-        #for i in grid:
-        #    print(i)
-
-        #convert cluster centers into grid index
         goals=np.asarray(clusters)[:, 0]
-        #do Djikstra
 
-        #for x in goals:
-        #    print(self.Djikstra(grid, x))
-        path=self.search(grid, goals)
+        path=self.multiDjikstra(grid, goals)
         print(path)
 
         for i in range(len(clusters)):
             center=self.convertToMap(clusters[i])
-
-
-            if path[i][0]!=0 and self.getCost(path[i], alpha, center)<correct_cost:# and self.isRightDirection(center, direction):
+            #choose the shortest path
+            if path[i][0]!=0 and self.getCost(path[i], alpha, center)<correct_cost:
                 correct_cost=self.getCost(path[i], alpha, center)
                 correct_distance=path[i][0]
                 correct_goal=center
                 correct_index=i
                 correct_available=True
 
-        if correct_goal is None:
-            return None
-
-        print("correct")
-        next_goal=correct_goal
-        index=correct_index
-        distance=correct_distance
-
         #if next_frontier is closer than next wall_scan goal, visit next_frontier 
-        if self.next_frontier is not None and next_goal is not None:
-            if distance>self.Djikstra(grid, self.WorldToGrid(self.next_frontier)):
-                distance=self.Djikstra(grid, self.WorldToGrid(self.next_frontier))
+        if self.next_frontier is not None:
+            if correct_goal is not None:
+                print("received inspection waypoint")
+                #is path to frontier is shorter, go to frontier
+                frontier_distance=self.singleDjikstra(grid, self.WorldToGrid(self.next_frontier))
+                if correct_distance>frontier_distance and frontier_distance!=0:
+                    print("going to frontier")
+                    distance=frontier_distance
+                    next_goal=self.next_frontier
+                    isFrontier=True
+                    self.next_frontier=None
+                else:
+                    next_goal=correct_goal
+                    index=correct_index
+                    distance=correct_distance 
+            else:
                 print("going to frontier")
+                distance=self.singleDjikstra(grid, self.WorldToGrid(self.next_frontier))
                 next_goal=self.next_frontier
                 isFrontier=True
                 self.next_frontier=None
-
-        if next_goal is None:
-            distance=self.Djikstra(grid, self.WorldToGrid(self.next_frontier))
-            print("going to frontier")
-            next_goal=self.next_frontier
-            isFrontier=True
-            self.next_frontier=None
-
-        if next_goal is not None and not isFrontier:
-            self.cluster_centers.remove(clusters[index])
+                return next_goal
+        else:
+            #set as correct goal, if there's none will return None
+            next_goal=correct_goal
+            index=correct_index
+            distance=correct_distance 
 
         if next_goal is not None:
             self.total_distance_travelled+=distance
+            if not isFrontier:
+                self.cluster_centers.remove(clusters[index])   
 
         return next_goal
 
@@ -289,11 +294,8 @@ class WallScanExplorer(object):
             for j in range(-int(r/2), int(r/2)):
                 self.goals_map[point+i+j*self.map_width]=100
 
-#-------------------------auxiliary functions
-    def search(self, grid, goals):
-        # ----------------------------------------
-        # insert code here
-        # ----------------------------------------
+    def multiDjikstra(self, grid, goals):
+        # Djikstra that find several goals
         #first print initial value, expand and insert to pool, choose one with least optimal path, if equal to goal return, if cannot expand fail.
         delta = [[0, 1], # go up
              [ -1, 0], # go left
@@ -344,10 +346,8 @@ class WallScanExplorer(object):
         print("found:", found)
         return path
 
-    def Djikstra(self, grid, goal):
-        # ----------------------------------------
-        # insert code here
-        # ----------------------------------------
+    def singleDjikstra(self, grid, goal):
+        # return shortest path to a single goal
         #first print initial value, expand and insert to pool, choose one with least optimal path, if equal to goal return, if cannot expand fail.
         delta = [[0, 1], # go up
              [ -1, 0], # go left
@@ -383,7 +383,6 @@ class WallScanExplorer(object):
                 if visit[new[1]][new[2]]==0 and grid[new[1]][new[2]]==0:
                     pool.append([])
                     pool[index].append(new)
-                    #print(pool)
                     index+=1
                     visit[new[1]][new[2]]=1
         
@@ -449,7 +448,6 @@ class WallScanExplorer(object):
             visited[index]=1
 
         return result
-
 
     def map_callback(self, msg):
 
