@@ -4,7 +4,7 @@ clearing_rotation_allowed: false
 
 TrajectoryPlannerROS:
 
-   max_vel_x: 2.7 # 5km/h=1.3m/s
+   max_vel_x: 2.8 # 5km/h=1.3m/s
    min_vel_x: 0.5
 
    max_vel_y: 0.0  # zero for a differential drive robot

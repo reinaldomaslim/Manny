@@ -16,23 +16,15 @@
   <license>TODO</license>
 
 
-<<<<<<< HEAD
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
-=======
-  <!-- Url tags are optional, but mutiple are allowed, one per tag -->
->>>>>>> 0d5f0d2d54f8f17abc1dcb94d7671808d3593457
+
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
   <!-- <url type="website">http://wiki.ros.org/manny</url> -->
 
-
-<<<<<<< HEAD
   <!-- Author tags are optional, multiple are allowed, one per tag -->
   <!-- Authors do not have to be maintainers, but could be -->
-=======
-  <!-- Author tags are optional, mutiple are allowed, one per tag -->
-  <!-- Authors do not have to be maintianers, but could be -->
->>>>>>> 0d5f0d2d54f8f17abc1dcb94d7671808d3593457
+
   <!-- Example: -->
   <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
 
@@ -49,13 +41,6 @@
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
-<<<<<<< HEAD
-  <build_depend>roscpp</build_depend>
-  <build_depend>rospy</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <run_depend>roscpp</run_depend>
-  <run_depend>rospy</run_depend>
-=======
   <build_depend>geometry_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>roscpp</build_depend>
@@ -67,7 +52,7 @@
   <run_depend>roscpp</run_depend>
   <run_depend>rospy</run_depend>
   <run_depend>sensor_msgs</run_depend>
->>>>>>> 0d5f0d2d54f8f17abc1dcb94d7671808d3593457
+
   <run_depend>std_msgs</run_depend>
 
 
@@ -76,8 +61,5 @@
     <!-- Other tools can request additional information be placed here -->
 
   </export>
-<<<<<<< HEAD
+
 </package>
-=======
-</package>
->>>>>>> 0d5f0d2d54f8f17abc1dcb94d7671808d3593457
